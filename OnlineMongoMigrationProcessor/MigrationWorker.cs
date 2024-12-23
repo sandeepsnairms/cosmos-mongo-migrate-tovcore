@@ -580,12 +580,10 @@ namespace OnlineMongoMigrationProcessor
                     // Process change streams
                     if (Online && !MigrationCancelled)
                     {
-                        if (targetClient != null)
-                        {
-                            Log.WriteLine($"{dbName}.{colName} ProcessCollectionChangeStream invoked");
-                            targetClient = new MongoClient(targetConnectionString);
-                            Task.Run(() => ProcessCollectionChangeStream(item));
-                        }
+                        targetClient = new MongoClient(targetConnectionString);
+                        Log.WriteLine($"{dbName}.{colName} ProcessCollectionChangeStream invoked");                            
+                        Task.Run(() => ProcessCollectionChangeStream(item));
+                        
                     }
 
                     if (!Online && !MigrationCancelled)

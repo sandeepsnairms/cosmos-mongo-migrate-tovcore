@@ -74,28 +74,28 @@ namespace OnlineMongoMigrationProcessor
         }
 
 
-        public static BsonValue ConvertToBsonValue(JObject jObject)
-        {
-            // Create a new BsonDocument
-            var bsonDoc = new BsonDocument();
+        //public static BsonValue ConvertToBsonValue(JObject jObject)
+        //{
+        //    // Create a new BsonDocument
+        //    var bsonDoc = new BsonDocument();
 
-            // Iterate through JObject properties
-            foreach (var property in jObject.Properties())
-            {
-                if (property.Value.Type == JTokenType.Object && property.Value["$oid"] != null)
-                {
-                    // Convert ObjectId in JObject to BsonObjectId
-                    string oidString = property.Value["$oid"].ToString();
-                    return new BsonObjectId(ObjectId.Parse(oidString));
-                }
-                else
-                {
-                    // Convert regular JObject properties to BsonValues
-                   return  BsonValue.Create(property.Value);
-                }
-            }
+        //    // Iterate through JObject properties
+        //    foreach (var property in jObject.Properties())
+        //    {
+        //        if (property.Value.Type == JTokenType.Object && property.Value["$oid"] != null)
+        //        {
+        //            // Convert ObjectId in JObject to BsonObjectId
+        //            string oidString = property.Value["$oid"].ToString();
+        //            return new BsonObjectId(ObjectId.Parse(oidString));
+        //        }
+        //        else
+        //        {
+        //            // Convert regular JObject properties to BsonValues
+        //           return  BsonValue.Create(property.Value);
+        //        }
+        //    }
 
-            return null;
+        //    return null;
         }
 
     }
