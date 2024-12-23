@@ -6,3 +6,6 @@
 /MongoMigrationWebApp/obj/Debug/net6.0
 /OnlineMongoMigrationProcessor/obj
 /MongoMigrationWebApp/obj
+/MongoMigrationWebApp/bin
+/MongoMigrationWebApp/publish
+/OnlineMongoMigrationProcessor/bin
