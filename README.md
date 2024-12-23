@@ -1,8 +1,44 @@
-#Clone Github repo
+# Migration Tool for Azure Cosmos DB for MongoDB (vCore-Based)
 
-Clone `https://github.com/sandeepsnairms/mongomigrationui` to local
+Simplify your migration journey to **Azure Cosmos DB for MongoDB (vCore-based)** with a tool designed for efficiency, reliability, and ease of use. Whether you're migrating data online or offline, this tool provides a seamless experience tailored to meet your needs.
 
-# Deploy App to Azure Web App
+## Key Features
+
+- **Flexible Migration Options**  
+  Supports both online and offline migrations to suit your business requirements.
+
+- **User-Friendly**  
+  Zero learning curve—just provide your connection strings and specify the collections to migrate.
+
+- **Automatic Resume**  
+  Migration automatically resumes in case of connection loss, ensuring reliability.
+
+- **Private Deployment**  
+  Deploy the tool in your private virtual network (vNet) for enhanced security.
+
+- **Standalone Solution**  
+  Operates independently, with no dependencies on other Azure resources.
+
+- **Scalable Performance**  
+  Choose your Azure Web App pricing plan based on your speed needs.  
+  - Default: **B1**  
+  - Recommendation for large workloads: **Premium v3 P2V3**
+
+- **Customizable**  
+  Easily adapt the provided C# code to meet your specific requirements.
+
+---
+
+Effortlessly migrate your MongoDB collections while maintaining control, security, and scalability. Start your migration today and unlock the full potential of Azure Cosmos DB!
+
+
+## Deployment Steps
+
+### Clone Github repo
+
+Clone `https://github.com/sandeepsnairms/mongomigrationui`.
+
+### Deploy App to Azure Web App
 
 1. Open PowerShell.
 2. Navigate to the cloned project folder.
@@ -47,4 +83,4 @@ Clone `https://github.com/sandeepsnairms/mongomigrationui` to local
 	Write-Host "Deployment completed successfully!"
 	```
 
-4. Naviate to `http://<WebAppName>.azurewebsites.net` to use the tool.
+4. Naviate to `https://<WebAppName>.azurewebsites.net` to use the tool.
