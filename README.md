@@ -36,7 +36,7 @@ Effortlessly migrate your MongoDB collections while maintaining control, securit
 
 ### Clone Github repo
 
-Clone `https://github.com/sandeepsnairms/mongomigrationui`.
+Clone `https://github.com/sandeepsnairms/cosmos-mongo-migrate-tovcore`.
 
 ### Deploy App to Azure Web App
 
