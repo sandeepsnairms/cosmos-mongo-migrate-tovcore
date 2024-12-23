@@ -51,7 +51,7 @@ Clone `https://github.com/sandeepsnairms/cosmos-mongo-migrate-tovcore`.
 	$webAppName = <Replace with Web App Name>
 	$projectFolderPath = <Replace with path to cloned repo on local>
 
-	# Paths- No chnagees required
+	# Paths- No changes required
 	$projectFilePath = "$projectFolderPath\MongoMigrationWebApp.csproj"
 	$publishFolder = "$projectFolderPath\publish"
 	$zipPath = "$publishFolder\app.zip"
