@@ -445,7 +445,7 @@ namespace OnlineMongoMigrationProcessor
         {
             string dbName = item.DatabaseName;
             string colName = item.CollectionName;
-            int maxRetries = 1;// 0;
+            int maxRetries = 10;
             string jobId=Job.Id;
 
             TimeSpan backoff = TimeSpan.FromSeconds(2);
@@ -559,7 +559,7 @@ namespace OnlineMongoMigrationProcessor
                         }
                     }
 
-                    if (restoredChunks == item.MigrationChunks.Count && MigrationCancelled)
+                    if (restoredChunks == item.MigrationChunks.Count && !MigrationCancelled)
                     {
                         item.RestoreGap = Math.Max(item.ActualDocCount, item.EstimatedDocCount) - restoredDocs;
                         item.RestorePercent = 100;
