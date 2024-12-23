@@ -366,7 +366,7 @@ namespace OnlineMongoMigrationProcessor
                                     continueProcessing = false;
                                     item.MigrationChunks[i].IsDownloaded = true;
                                     Jobs.Save(); //persists state
-
+                                    dumpAttempts = 0;
                                     if (!restoreInvoked)
                                     {
                                         Log.WriteLine($"{dbName}.{colName} ProcessBulkRestore invoked");
@@ -494,6 +494,9 @@ namespace OnlineMongoMigrationProcessor
                                         continueProcessing = false;
                                         item.MigrationChunks[i].IsUploaded = true;
                                         Jobs.Save(); //persists state
+
+                                        restoreAttempts = 0;
+
                                         restoredChunks++;
                                         restoredDocs = restoredDocs + item.MigrationChunks[i].RestoredSucessDocCount;
                                         try
