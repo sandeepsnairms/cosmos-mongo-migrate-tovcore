@@ -14,7 +14,7 @@ Simplify your migration journey to **Azure Cosmos DB for MongoDB (vCore-based)**
   Migration automatically resumes in case of connection loss, ensuring reliability.
 
 - **Private Deployment**  
-  Deploy the tool in your private virtual network (vNet) for enhanced security.
+  Deploy the tool in your private virtual network (vNet) for enhanced security. (Update main.bicep for vNet configuration).
 
 - **Standalone Solution**  
   Operates independently, with no dependencies on other Azure resources.
@@ -22,7 +22,7 @@ Simplify your migration journey to **Azure Cosmos DB for MongoDB (vCore-based)**
 - **Scalable Performance**  
   Choose your Azure Web App pricing plan based on your speed needs.  
   - Default: **B1**  
-  - Recommendation for large workloads: **Premium v3 P2V3**
+  - Recommendation for large workloads: **Premium v3 P1V3** (Update main.bicep)
 
 - **Customizable**  
   Easily adapt the provided C# code to meet your specific requirements.
