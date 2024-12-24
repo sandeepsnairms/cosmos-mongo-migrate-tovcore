@@ -1,6 +1,8 @@
 param location string
 param webAppName string
-
+//param vnetName string
+//param vnetResourceGroup string
+//param subnetName string
 var appServicePlanName = '${webAppName}SP'
 
 resource appServicePlan 'Microsoft.Web/serverfarms@2022-03-01' = {
