@@ -21,15 +21,24 @@ using JsonConvert = Newtonsoft.Json.JsonConvert;
 using System.Reflection.Metadata.Ecma335;
 using System.Security.Cryptography;
 using static System.Net.WebRequestMethods;
+using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations;
 
 namespace OnlineMongoMigrationProcessor
 {
-    public  class MigrationWorker
+#pragma warning disable CS8629
+#pragma warning disable CS8600
+#pragma warning disable CS8602
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+#pragma warning disable CS8625
+
+    public class MigrationWorker
     {
 
         string toolsDownloadUrl = "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-windows-x86_64-100.10.0.zip"; // Replace with actual URL
         string toolsDestinationFolder=$"{Path.GetTempPath()}mongo-tools";
-        string toolsLaunchFolder;
+        string toolsLaunchFolder=string.Empty;
         string MongoDumpOutputFolder= $"{Path.GetTempPath()}mongodump";
         DateTime MigrationJobStartTime = DateTime.Now;
         bool Online = true;
@@ -38,13 +47,13 @@ namespace OnlineMongoMigrationProcessor
 
         public bool ProcessRunning { get; set; }
 
-        private Joblist Jobs;
-        private MongoClient sourceClient;
-        private MongoClient targetClient;
+        private Joblist? Jobs;
+        private MongoClient? sourceClient;
+        private MongoClient? targetClient;
 
-        MigrationJob Job;
+        MigrationJob? Job;
 
-        public string CurrentJobId { get; set; }
+        public string? CurrentJobId { get; set; }
 
         public MigrationWorker(Joblist jobs)
         {
@@ -58,13 +67,13 @@ namespace OnlineMongoMigrationProcessor
             ProcessRunning = false;
         }
 
-        public async Task<bool> GetCurrentJob(string jobId)
-        {
-            if (jobId == CurrentJobId)
-                return true;
-            else
-                return false;
-        }
+        //bool GetCurrentJob(string jobId)
+        //{
+        //    if (jobId == CurrentJobId)
+        //        return true;
+        //    else
+        //        return false;
+        //}
 
         public async Task StartMigrationAsync(MigrationJob _job, string sourceConnectionString, string targetConnectionString, string namespacesToMigrate, bool doBulkCopy, bool trackChangeStreams)
         {
@@ -107,8 +116,6 @@ namespace OnlineMongoMigrationProcessor
                     if (MigrationCancelled)
                         return;
 
-                    //var settings = MongoClientSettings.FromConnectionString(sourceConnectionString);
-                    //settings.ServerSelectionTimeout = TimeSpan.FromMilliseconds(120000); // 2 minutes
 
                     sourceClient = new MongoClient(sourceConnectionString);
 
@@ -145,7 +152,7 @@ namespace OnlineMongoMigrationProcessor
                             Job.MigrationUnits.Add(mu);
 
                         }
-                        Jobs.Save();
+                        Jobs?.Save();
                         Log.Save();
                     }
                     if (BulkCopy)
@@ -172,7 +179,7 @@ namespace OnlineMongoMigrationProcessor
                         Log.Save();
 
                         Job.CurrentlyActive = false; 
-                        Jobs.Save();
+                        Jobs?.Save();
 
                         ProcessRunning = false;
                     }
@@ -192,7 +199,7 @@ namespace OnlineMongoMigrationProcessor
                     Log.Save();
 
                     Job.CurrentlyActive = false;
-                    Jobs.Save();
+                    Jobs?.Save();
                     continueProcessing = false;
                     ProcessRunning = false;
                 }
@@ -216,6 +223,7 @@ namespace OnlineMongoMigrationProcessor
             var statsCommand = new BsonDocument { { "collStats", collectionName } };
             var stats = await database.RunCommandAsync<BsonDocument>(statsCommand);
             long totalCollectionSizeBytes = stats["storageSize"].ToInt64();
+            var documentCount = stats["count"].AsInt32;
 
             // Get total document count
             //long totalDocuments = await collection.CountDocumentsAsync(new BsonDocument());
@@ -229,45 +237,61 @@ namespace OnlineMongoMigrationProcessor
                 Log.WriteLine($"Create Partitions for { databaseName}.{ collectionName}");
                 Log.Save();
 
-                var partitioner = new SamplePartitioner(collection);
-                var partitions = partitioner.CreatePartitions(partitionKeyField, totalChunks);
-              
-                for (int i = 0; i < partitions.Count; i++)
-                {
-                    string startId;
-                    string endId;
 
-                    if (i == 0)//first partition, no gte
+                var partitioner = new SamplePartitioner(collection);
+                // List of data types to process
+                var dataTypes = new[] {  DataType.Int, DataType.Int64, DataType.String, DataType.Object, DataType.Decimal128, DataType.Date, DataType.ObjectId, DataType.UUID };
+
+                foreach (var dataType in dataTypes)
+                {
+                    // Create partitions for the current data type
+                    List<(BsonValue Min, BsonValue Max)> partitions = partitioner.CreatePartitions(partitionKeyField, totalChunks, dataType, documentCount/ totalChunks);
+
+                    if (partitions == null)
+                        continue;
+
+
+                    // Add the partitions to migrationChunks
+                    for (int i = 0; i < partitions.Count; i++)
                     {
-                        startId = "";
-                        endId = partitions[0].Max.ToString();
+                        string startId;
+                        string endId;
+
+                        if (i == 0) // First partition, no gte
+                        {
+                            startId = "";
+                            endId = partitions[0].Max.ToString();
+                        }
+                        else if (i == partitions.Count - 1) // Last partition, no lte
+                        {
+                            startId = partitions[i].Min.ToString();
+                            endId = "";
+                        }
+                        else // Middle partitions
+                        {
+                            startId = partitions[i].Min.ToString();
+                            endId = partitions[i].Max.ToString();
+                        }
+
+                        // Add the current partition as a migration chunk
+                        migrationChunks.Add(new MigrationChunk(startId, endId, dataType, false, false));
                     }
-                    else if (i == partitions.Count - 1) //last partition ,no lte
-                    {
-                        startId = partitions[i].Min.ToString();
-                        endId = "";
-                    }
-                    else //middle partitions
-                    {
-                        startId = partitions[i].Min.ToString();
-                        endId = partitions[i].Max.ToString();
-                    }
-                    migrationChunks.Add(new MigrationChunk(startId, endId, false, false));
                 }
+
             }
             else
             {
                 //single chunk in case of data set being small.
-                migrationChunks.Add(new MigrationChunk(null, null, false, false));
+                migrationChunks.Add(new MigrationChunk(null, null,DataType.String ,false, false));
             }
 
             return migrationChunks;
         }
 
-        async Task GetActualDocumentCount(IMongoCollection<BsonDocument> collection, MigrationUnit item)
+        void GetActualDocumentCount(IMongoCollection<BsonDocument> collection, MigrationUnit item)
         {
             item.ActualDocCount = collection.CountDocuments(Builders<BsonDocument>.Filter.Empty);
-            Jobs.Save();
+            Jobs?.Save();
         }
 
         void ProcessBulkDump( MigrationUnit item, string sourceConnectionString, string targetConnectionstring,string partitionKeyField="_id")
@@ -312,8 +336,8 @@ namespace OnlineMongoMigrationProcessor
                     double initialPercent = ((double)100 / ((double)item.MigrationChunks.Count)) * i;
                     double contributionfactor = (double)1 / (double)item.MigrationChunks.Count;
 
+                    //double contributionfactor = (double)item.MigrationChunks[i].DumpQueryDocCount / (double)Math.Max(item.ActualDocCount,item.EstimatedDocCount);
 
-                    
                     long docCount=0;
 
                     if (!item.MigrationChunks[i].IsDownloaded == true)
@@ -329,27 +353,117 @@ namespace OnlineMongoMigrationProcessor
                             {
                                 if (item.MigrationChunks.Count > 1)
                                 {
+                                    // Initialize gte and lt as null
                                     BsonValue gte = null;
                                     BsonValue lt = null;
 
-
-                                    if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                    switch (item.MigrationChunks[i].DataType)
                                     {
-                                        gte = new BsonObjectId(ObjectId.Parse(item.MigrationChunks[i].Gte));
+                                        case DataType.ObjectId:
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                            {
+                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonObjectId(ObjectId.Parse(item.MigrationChunks[i].Gte));
+                                            }
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
+                                            {
+                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonObjectId(ObjectId.Parse(item.MigrationChunks[i].Lt));
+                                            }
+                                            break;
 
+                                        case DataType.Int:
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                            {
+                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonInt32(int.Parse(item.MigrationChunks[i].Gte));
+                                            }
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
+                                            {
+                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonInt32(int.Parse(item.MigrationChunks[i].Lt));
+                                            }
+                                            break;
+
+                                        case DataType.Int64:
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                            {
+                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonInt64(long.Parse(item.MigrationChunks[i].Gte));
+                                            }
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
+                                            {
+                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonInt64(long.Parse(item.MigrationChunks[i].Lt));
+                                            }
+                                            break;
+
+                                        case DataType.String:
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                            {
+                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonString(item.MigrationChunks[i].Gte);
+                                            }
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
+                                            {
+                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonString(item.MigrationChunks[i].Lt);
+                                            }
+                                            break;
+
+                                        case DataType.Object:
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                            {
+                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : BsonDocument.Parse(item.MigrationChunks[i].Gte);
+                                            }
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
+                                            {
+                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : BsonDocument.Parse(item.MigrationChunks[i].Lt);
+                                            }
+                                            break;
+
+                                        case DataType.Decimal128:
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                            {
+                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonDecimal128(Decimal128.Parse(item.MigrationChunks[i].Gte));
+                                            }
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
+                                            {
+                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonDecimal128(Decimal128.Parse(item.MigrationChunks[i].Lt));
+                                            }
+                                            break;
+
+                                        case DataType.Date:
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                            {
+                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonDateTime(DateTime.Parse(item.MigrationChunks[i].Gte));
+                                            }
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
+                                            {
+                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonDateTime(DateTime.Parse(item.MigrationChunks[i].Lt));
+                                            }
+                                            break;
+
+                                        case DataType.UUID:
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
+                                            {
+                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonBinaryData(Guid.Parse(item.MigrationChunks[i].Gte).ToByteArray(), BsonBinarySubType.UuidStandard);
+                                            }
+                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
+                                            {
+                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonBinaryData(Guid.Parse(item.MigrationChunks[i].Lt).ToByteArray(), BsonBinarySubType.UuidStandard);
+                                            }
+                                            break;
+
+                                        default:
+                                            throw new ArgumentException($"Unsupported data type: {item.MigrationChunks[i].DataType}");
                                     }
-                                    if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                    {
-                                        lt = new BsonObjectId(ObjectId.Parse(item.MigrationChunks[i].Lt));
-                                    }
 
 
+                                    // Log information
                                     Log.WriteLine($"{dbName}.{colName}-Chunk[{i}] generating query");
                                     Log.Save();
-                                                               
 
-                                    string query;
-                                    docCount = MongoHelper.GenerateQueryAndCount(collection, gte, lt, out query);
+                                    // Generate query and get document count
+                                    string query = MongoHelper.GenerateQueryString(gte, lt, item.MigrationChunks[i].DataType); ; // Generate the query string for debugging or logging
+
+                                    docCount = MongoHelper.getDocCount(collection, gte, lt,item.MigrationChunks[i].DataType );
+
+
+                                    //string query;
+                                    //docCount = MongoHelper.GenerateQueryAndCount(collection, gte, lt, item.MigrationChunks[i].dataType, out query);
                                     item.MigrationChunks[i].DumpQueryDocCount = docCount;
 
                                     downloadCount = downloadCount + item.MigrationChunks[i].DumpQueryDocCount;
@@ -365,7 +479,7 @@ namespace OnlineMongoMigrationProcessor
                                 {
                                     continueProcessing = false;
                                     item.MigrationChunks[i].IsDownloaded = true;
-                                    Jobs.Save(); //persists state
+                                    Jobs?.Save(); //persists state
                                     dumpAttempts = 0;
                                     if (!restoreInvoked)
                                     {
@@ -391,7 +505,7 @@ namespace OnlineMongoMigrationProcessor
                                     Log.Save();
 
                                     Job.CurrentlyActive = false;
-                                    Jobs.Save();
+                                    Jobs?.Save();
 
                                     ProcessRunning = false;
                                 }
@@ -410,14 +524,14 @@ namespace OnlineMongoMigrationProcessor
                                 Log.Save();
 
                                 Job.CurrentlyActive = false;
-                                Jobs.Save();
+                                Jobs?.Save();
                                 ProcessRunning = false;
                             }
                         }
                         if (dumpAttempts == maxRetries)
                         {
                             Job.CurrentlyActive = false;
-                            Jobs.Save();
+                            Jobs?.Save();
                         }
                                 
                     }
@@ -441,7 +555,7 @@ namespace OnlineMongoMigrationProcessor
             }           
         }
 
-        async Task ProcessBulkRestore(MigrationUnit item,string targetConnectionString)
+        void ProcessBulkRestore(MigrationUnit item,string targetConnectionString)
         {
             string dbName = item.DatabaseName;
             string colName = item.CollectionName;
@@ -477,7 +591,8 @@ namespace OnlineMongoMigrationProcessor
 
 
                             double initialPercent = ((double)100 / ((double)item.MigrationChunks.Count)) * i;
-                            double contributionfactor = (double)1 / (double)item.MigrationChunks.Count;
+                            //double contributionfactor = (double)1 / (double)item.MigrationChunks.Count;
+                            double contributionfactor = (double)item.MigrationChunks[i].DumpQueryDocCount / (double)Math.Max(item.ActualDocCount, item.EstimatedDocCount);
 
                             Log.WriteLine($"{dbName}.{colName}-{i} ProcessBulkRestore processing");
 
@@ -493,7 +608,7 @@ namespace OnlineMongoMigrationProcessor
                                     {
                                         continueProcessing = false;
                                         item.MigrationChunks[i].IsUploaded = true;
-                                        Jobs.Save(); //persists state
+                                        Jobs?.Save(); //persists state
 
                                         restoreAttempts = 0;
 
@@ -521,7 +636,7 @@ namespace OnlineMongoMigrationProcessor
                                         Log.Save();
 
                                         Job.CurrentlyActive = false;
-                                        Jobs.Save();
+                                        Jobs?.Save();
 
                                         ProcessRunning = false;
                                     }
@@ -540,7 +655,7 @@ namespace OnlineMongoMigrationProcessor
                                     Log.Save();
 
                                     Job.CurrentlyActive = false;
-                                    Jobs.Save();
+                                    Jobs?.Save();
                                     ProcessRunning = false;
                                 }
                             }
@@ -548,7 +663,7 @@ namespace OnlineMongoMigrationProcessor
                             {
 
                                 Job.CurrentlyActive = false;
-                                Jobs.Save();
+                                Jobs?.Save();
                                 ProcessRunning = false;
                             }
                         }
@@ -564,7 +679,7 @@ namespace OnlineMongoMigrationProcessor
                         item.RestoreGap = Math.Max(item.ActualDocCount, item.EstimatedDocCount) - restoredDocs;
                         item.RestorePercent = 100;
                         item.RestoreComplete = true;
-                        Jobs.Save(); //persists state
+                        Jobs?.Save(); //persists state
                     }
                     else
                     {
@@ -597,7 +712,7 @@ namespace OnlineMongoMigrationProcessor
                             migrationJob.IsCompleted = true;
                             migrationJob.CurrentlyActive = false;
                             ProcessRunning = false;
-                            Jobs.Save();
+                            Jobs?.Save();
                         }
                     }
                 }
@@ -610,6 +725,8 @@ namespace OnlineMongoMigrationProcessor
 
         private bool IsOfflineJobCompleted(MigrationJob migrationJob)
         {
+            if (migrationJob == null) return true;
+
             foreach (var mu in migrationJob.MigrationUnits)
             {
                 if (!mu.RestoreComplete || !mu.DumpComplete)
@@ -660,7 +777,7 @@ namespace OnlineMongoMigrationProcessor
 
                         item.resumeToken = cursor.Current.FirstOrDefault().ResumeToken.ToJson();
                         item.cursorUtcTimestamp = BsonTimestampToUtcDateTime(timestamp);
-                        Jobs.Save(); //persists state
+                        Jobs?.Save(); //persists state
 
                         if (MigrationCancelled) break;
                     }   

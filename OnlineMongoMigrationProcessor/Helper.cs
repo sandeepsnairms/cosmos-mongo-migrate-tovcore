@@ -9,7 +9,7 @@ namespace OnlineMongoMigrationProcessor
 {
     public static class Helper
     {
-        public async static Task<string> EnsureMongoToolsAvailableAsync(string toolsDestinationFolder,string toolsDownloadUrl)
+        public static async Task<string> EnsureMongoToolsAvailableAsync(string toolsDestinationFolder,string toolsDownloadUrl)
         {
             try
             {

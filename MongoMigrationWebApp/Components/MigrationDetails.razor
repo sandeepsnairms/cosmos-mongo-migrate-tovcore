@@ -86,7 +86,7 @@
     [Parameter]
     public EventCallback<OnlineMongoMigrationProcessor.MigrationJob> OnSubmit { get; set; }
 
-    private string ErrorMessage;
+    private string ErrorMessage=string.Empty;
 
     public Tuple<bool, string> ValidateNameSpaceFormat(string input)
     {

@@ -12,15 +12,15 @@
     <h3>
         <button class="btn btn-light" @onclick="GoBack" style="border: none; background: transparent;">
             <i class="bi bi-arrow-left"></i>
-        </button> @migrationJob.Name - Job Status
+        </button> @migrationJob?.Name - Job Status
     </h3>
     <div class="d-flex align-items-center mb-3">
-        @if ( !migrationJob.IsCompleted && !migrationJob.CurrentlyActive && (migrationJob.IsStarted || !JobManager.migrationWorker.ProcessRunning))
+        @if (migrationJob !=null && !migrationJob.IsCompleted && !migrationJob.CurrentlyActive && (migrationJob.IsStarted || (JobManager.migrationWorker != null && !JobManager.migrationWorker.ProcessRunning)))
         {
             <button class="btn btn-primary mx-2" @onclick="ResumeJob">Resume Job</button>
         }
 
-        @if (!migrationJob.IsCancelled && !migrationJob.IsCompleted && migrationJob.CurrentlyActive && JobManager.migrationWorker.ProcessRunning)
+        @if (migrationJob!=null && !migrationJob.IsCancelled && !migrationJob.IsCompleted && migrationJob.CurrentlyActive && JobManager.migrationWorker != null && JobManager.migrationWorker.ProcessRunning)
         {
             <button class="btn btn-primary mx-2" @onclick="PauseJob">Pause Job</button>
             @if (migrationJob.IsOnline)
@@ -41,9 +41,9 @@
 }
 
 
-@if (_MigrationDetailsPopUpOpen)
+@if (_MigrationDetailsPopUpOpen && migrationJob!=null)
 {
-    <MongoMigrationWebApp.Components.MigrationDetails NewMode=false Name="@migrationJob.Name"
+    <MongoMigrationWebApp.Components.MigrationDetails NewMode=false Name="@migrationJob?.Name"
     IsOnline="@migrationJob.IsOnline"
     SourceEndpoint="@migrationJob.SourceEndpoint"
     TargetEndpoint="@migrationJob.TargetEndpoint"
@@ -69,7 +69,7 @@
         </tr>
     </thead>
     <tbody>
-        @if (migrationJob.MigrationUnits!=null)
+        @if (migrationJob!=null && migrationJob.MigrationUnits != null)
         {
             @foreach (var unit in migrationJob.MigrationUnits)
             {
@@ -97,7 +97,7 @@
 <div>
     <table class="table message-output">
         <tbody>
-            @if (LogBucket.GetVerboseMessages() != null && LogBucket.GetVerboseMessages().Count > 0)
+            @if (LogBucket !=null && LogBucket.GetVerboseMessages() != null && LogBucket.GetVerboseMessages().Count > 0)
             {
                 @foreach (var logObject in LogBucket.GetVerboseMessages())
                 {
@@ -121,7 +121,7 @@
 </div>
 
 
-@if (LogBucket.Logs != null)
+@if (LogBucket!=null && LogBucket.Logs != null)
 {
     <h5 class=" pt-4">
         <button class="btn btn-light" @onclick="DownloadFile" style="border: none; background: transparent;">
@@ -178,22 +178,27 @@
 }
 @code {
 
-    [Parameter]
-    public string JobId { get; set; }
+#pragma warning disable CS8602
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+
 
     [Parameter]
-    public MigrationJob migrationJob { get; set; }
+    public string? JobId { get; set; }
 
     [Parameter]
-    public LogBucket LogBucket { get; set; }
+    public MigrationJob? migrationJob { get; set; }
 
-    private string ErrorMessage;
+    [Parameter]
+    public LogBucket? LogBucket { get; set; }
+
+    private string ErrorMessage=string.Empty;
 
     private bool _MigrationDetailsPopUpOpen;
 
     private Timer? RefreshTimer;
 
-    private string _Message;
+    private string _Message=string.Empty;
 
     private bool _YesNoDialogOpen;
        
@@ -291,7 +296,7 @@
 
         if (!migrationJob.IsStarted || (!migrationJob.IsCancelled && !migrationJob.IsCompleted && migrationJob.CurrentlyActive && !IsJobRunning()))
         {
-            ResumeJob();
+            await ResumeJob();
         }
         if (!migrationJob.IsCancelled && !migrationJob.IsCompleted && migrationJob.CurrentlyActive && IsJobRunning())
         {
@@ -328,6 +333,7 @@
             await Task.Run(() =>
             {
                 JobManager.DisposeLogs();
+#pragma warning disable CS4014
                 JobManager.migrationWorker.StartMigrationAsync(migrationJob, migrationJob.SourceConnectionString, migrationJob.TargetConnectionString, migrationJob.NameSpaces, true, migrationJob.IsOnline);
             });
         }

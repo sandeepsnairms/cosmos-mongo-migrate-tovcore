@@ -9,12 +9,12 @@ namespace OnlineMongoMigrationProcessor
 {
     public class Joblist
     {
-        public List<MigrationJob> MigrationJobs;
+        public List<MigrationJob>? MigrationJobs;
 
         public int activeRestoreProcessId=0;
         public int activeDumpProcessId=0;
 
-        private string filePath;
+        private string filePath=string.Empty;
 
         public Joblist()
         {
@@ -65,29 +65,29 @@ namespace OnlineMongoMigrationProcessor
 
     public class MigrationJob
     {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string SourceEndpoint { get; set; }
-        public string TargetEndpoint { get; set; }
+        public string ?Id { get; set; }
+        public string ?Name { get; set; }
+        public string ?SourceEndpoint { get; set; }
+        public string ?TargetEndpoint { get; set; }
         [JsonIgnore]
-        public string SourceConnectionString { get; set; }
+        public string ?SourceConnectionString { get; set; }
         [JsonIgnore]
-        public string TargetConnectionString { get; set; }
-        public string NameSpaces { get; set; }
+        public string ?TargetConnectionString { get; set; }
+        public string ?NameSpaces { get; set; }
         public DateTime? StartedOn { get; set; }
         public bool IsCompleted { get; set; }
         public bool IsOnline { get; set; }
         public bool IsCancelled { get; set; }
         public bool IsStarted { get; set; }
         public bool CurrentlyActive { get; set; }
-        public List<MigrationUnit> MigrationUnits { get; set; }
+        public List<MigrationUnit> ?MigrationUnits { get; set; }
     }
 
     public class MigrationUnit
     {
         public string DatabaseName { get; set; }
         public string CollectionName { get; set; }
-        public string resumeToken { get; set; }
+        public string? resumeToken { get; set; }
         public DateTime cursorUtcTimestamp { get; set; }
         public Double DumpPercent { get; set; }
         public Double RestorePercent { get; set; }
@@ -125,22 +125,36 @@ namespace OnlineMongoMigrationProcessor
 
     public class MigrationChunk
     {
-        public string Lt { get; set; }
-        public string Gte { get; set; }
-        public bool IsDownloaded { get; set; }
-        public bool IsUploaded { get; set; }
+        public string? Lt { get; set; }
+        public string? Gte { get; set; }
+        public bool? IsDownloaded { get; set; }
+        public bool? IsUploaded { get; set; }
         public long DumpQueryDocCount { get; set; }
         public long DumpResultDocCount { get; set; }
         public long RestoredSucessDocCount { get; set; }
         public long RestoredFailedDocCount { get; set; }
+        public DataType DataType { get; set; }
 
-        public MigrationChunk(string strtId, string endId, bool downloaded, bool uploaded)
+        public MigrationChunk(string strtId, string endId,DataType dataType, bool? downloaded, bool? uploaded)
         {
             this.Lt = endId;
             this.Gte = strtId;
             this.IsDownloaded = downloaded;
             this.IsUploaded = uploaded;
+            this.DataType = dataType;
         }
+    }
+
+    public enum DataType
+    {
+        ObjectId,
+        Int,
+        Int64,
+        Decimal128,
+        Date,
+        UUID,
+        String,
+        Object
     }
 }
 

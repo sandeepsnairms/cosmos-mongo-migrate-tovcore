@@ -13,10 +13,12 @@ using System.Threading.Tasks;
 
 namespace OnlineMongoMigrationProcessor
 {
+#pragma warning disable CS8600
+
     internal static class ProcessExecutor
     {
 
-        private static Process _process;
+        //private static Process? _process;
         private static bool MigrationCancelled = false;
 
         /// <summary>
@@ -25,96 +27,6 @@ namespace OnlineMongoMigrationProcessor
         /// <param name="exePath">The full path to the executable file.</param>
         /// <param name="arguments">The arguments to pass to the executable.</param>
         /// <returns>True if the process completed successfully, otherwise false.</returns>
-        //public static bool Execute(Joblist joblist,MigrationUnit item, double basePercent,double contribFator,long targetCount,string exePath, string arguments)
-        //{
-        //    try
-        //    {
-        //        using (var process = new Process
-        //        {
-        //            StartInfo = new ProcessStartInfo
-        //            {
-        //                FileName = exePath,
-        //                Arguments = arguments,
-        //                RedirectStandardOutput = true,
-        //                RedirectStandardError = true,
-        //                UseShellExecute = false,
-        //                CreateNoWindow = true
-        //            }
-        //        })
-        //        {
-        //            // Event handlers to capture output
-        //            process.OutputDataReceived += (sender, args) =>
-        //            {
-        //                if (!string.IsNullOrEmpty(args.Data))
-        //                {
-        //                    Log.WriteLine(args.Data); // Replace this with your UI update logic if needed
-        //                }
-        //            };
-
-        //            process.ErrorDataReceived += (sender, args) =>
-        //            {
-        //                if (!string.IsNullOrEmpty(args.Data))
-        //                {
-        //                    //extracting percentage completion, in case of restore and non query mongo dump.
-        //                    string percentValue = ExtractPercentage(args.Data);
-
-        //                    // extracting  doc count in case of query in mongodump
-        //                    string docsProcessed= ExtractDocCount(args.Data,string.Empty);
-        //                    Double percent=0;
-        //                    int count;
-
-        //                    if (!string.IsNullOrEmpty(percentValue))
-        //                        Double.TryParse(percentValue, out percent);                           
-
-        //                    if (!string.IsNullOrEmpty(docsProcessed) && int.TryParse(docsProcessed, out count) && count > 0)
-        //                    {
-        //                        percent = ((double)count/ (double)targetCount) *100;
-        //                    }
-
-        //                    if (percent> 0)
-        //                    {
-        //                        if (exePath.ToLower().Contains("restore"))
-        //                        {
-        //                            Log.WriteLine($"Chunk Restore Percentage: {percent}");
-        //                            item.RestorePercent = basePercent + percent * contribFator;
-        //                            if (item.RestorePercent == 100)
-        //                                item.RestoreComplete = true;
-        //                        }
-        //                        else
-        //                        {
-        //                            Log.WriteLine($"Chunk Dump Percentage: {percent}");
-        //                            item.DumpPercent = basePercent + percent * contribFator;
-        //                            if (item.DumpPercent == 100)
-        //                                item.DumpComplete = true;
-        //                        }
-        //                        joblist.Save();
-        //                    }
-        //                    else
-        //                        Log.WriteLine($"CLI Response: {args.Data}");
-        //                }
-        //            };
-
-        //            process.Start();
-
-        //            // Begin reading the streams asynchronously
-        //            process.BeginOutputReadLine();
-        //            process.BeginErrorReadLine();
-
-        //            process.WaitForExit();
-        //            Log.Save();
-        //            // Return true if the process completed successfully (exit code 0)
-        //            return process.ExitCode == 0;
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Log.WriteLine($"Error executing process: {ex.Message}",LogType.Error);
-        //        Log.Save();
-        //        return false;
-        //    }
-        //}
-
-
         public static bool Execute(Joblist joblist, MigrationUnit item,MigrationChunk chunk , double basePercent, double contribFator, long targetCount, string exePath, string arguments)
         {
             int pid;
@@ -152,6 +64,7 @@ namespace OnlineMongoMigrationProcessor
                 {
                     Log.WriteLine($"Too many instances of {pType}.", LogType.Error);
                     Log.Save();
+#pragma warning disable CA2200
                     throw ex;
                 }
                                 
@@ -195,7 +108,7 @@ namespace OnlineMongoMigrationProcessor
 
                             if (!string.IsNullOrEmpty(docsProcessed) && int.TryParse(docsProcessed, out count) && count > 0)
                             {
-                                percent = ((double)count / (double)targetCount) * 100;
+                                percent = Math.Round(((double)count / (double)targetCount) * 100, 3);
                             }
 
 
@@ -204,14 +117,14 @@ namespace OnlineMongoMigrationProcessor
                                 if (pType=="MongoRestore")
                                 {
                                     Log.AddVerboseMessage($"{pType} Chunk Percentage: {percent}");
-                                    item.RestorePercent = basePercent + percent * contribFator;
+                                    item.RestorePercent = basePercent + (percent * contribFator);
                                     if (item.RestorePercent == 100)
                                         item.RestoreComplete = true;
                                 }
                                 else
                                 {
                                     Log.AddVerboseMessage($"{pType} Chunk Percentage: {percent}");
-                                    item.DumpPercent = basePercent + percent * contribFator;
+                                    item.DumpPercent = basePercent + (percent * contribFator);
                                     if (item.DumpPercent == 100)
                                         item.DumpComplete = true;
                                 }

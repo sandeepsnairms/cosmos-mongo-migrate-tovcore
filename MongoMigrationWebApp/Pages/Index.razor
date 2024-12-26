@@ -18,7 +18,7 @@
 </div>
 @if (_loadingComplete==true)
 {
-    @if (migrationJobs.Count == 0)
+    @if (migrationJobs?.Count == 0)
     {
         <div>No migrations could be found</div>
     }
@@ -41,7 +41,7 @@
                 {
                     <tr>
                         <td>
-                            @if(migration.CurrentlyActive == true && JobManager.migrationWorker.ProcessRunning)
+                            @if (migration.CurrentlyActive == true && JobManager.migrationWorker!=null && JobManager.migrationWorker.ProcessRunning)
                             {
                                 <i class="bi bi-star-fill text-warning"></i>
                             }        
@@ -94,20 +94,25 @@
 }
 
 @code {
+
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+
     private bool _MigrationDetailsPopUpOpen;
 
     private bool _YesNoDialogOpen;
 
     private bool _MessageDialogOpen;
 
-    private string _Message;
+    private string _Message=string.Empty;
 
-    private OnlineMongoMigrationProcessor.MigrationJob _SelectedMigrationJob;
+    private OnlineMongoMigrationProcessor.MigrationJob? _SelectedMigrationJob;
 
-    private List<OnlineMongoMigrationProcessor.MigrationJob>  migrationJobs;
+    private List<OnlineMongoMigrationProcessor.MigrationJob>?  migrationJobs;
 
     private bool _loadingComplete;
 
+#pragma warning disable CS1998
     protected override async Task OnParametersSetAsync()
     {
         if (_loadingComplete == true)
@@ -120,6 +125,8 @@
         _loadingComplete = true;
 
     }
+#pragma warning restore CS1998
+#pragma warning disable CS8602
 
      private async Task DownloadFile()
     {
@@ -141,7 +148,7 @@
         }
     }
 
-    private void RemoveMigration(string id)
+    private void RemoveMigration(string? id)
     {
         var migrationJob = JobManager.GetMigrations().Find(m => m.Id == id);
         _SelectedMigrationJob = migrationJob;
@@ -193,7 +200,7 @@
     }
 
 
-    private void ViewMigration(string id)
+    private void ViewMigration(string? id)
     {
         NavigationManager.NavigateTo($"/migrationjobviewer/{id}");
     }

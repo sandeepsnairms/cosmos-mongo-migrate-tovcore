@@ -13,7 +13,7 @@ namespace MongoMigrationWebApp.Service
             _httpClient = httpClient;
         }
 
-        public async Task<string> GetFileDownloadUrl(string fileName)
+       string GetFileDownloadUrl(string fileName)
         {
             return $"/api/File/download/{fileName}";
         }

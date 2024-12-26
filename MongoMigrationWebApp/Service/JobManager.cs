@@ -4,13 +4,16 @@ using OnlineMongoMigrationProcessor;
 
 namespace MongoMigrationWebApp.Service
 {
-    
+#pragma warning disable CS8602
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+
     public class JobManager
     {
-        private Joblist joblist;
-        public MigrationWorker migrationWorker;
+        private Joblist? joblist;
+        public MigrationWorker? migrationWorker;
 
-        private List<LogObject> LogBucket { get; set; }
+        private List<LogObject>? LogBucket { get; set; }
 
         public JobManager() {
 
@@ -80,7 +83,7 @@ namespace MongoMigrationWebApp.Service
             return Task.CompletedTask;
         }
 
-        public async Task ClearJobFiles(string jobId)
+        void ClearJobFiles(string jobId)
         {
             try
             {
@@ -112,7 +115,7 @@ namespace MongoMigrationWebApp.Service
                 // Extract and return the host
                 return connectionString.Substring(startIndex, endIndex - startIndex).Split('@')[1];
             }
-            catch (Exception ex)
+            catch
             {                
                 return string.Empty;
             }

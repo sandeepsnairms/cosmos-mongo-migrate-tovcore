@@ -10,10 +10,12 @@ using System.Threading.Tasks;
 
 namespace OnlineMongoMigrationProcessor
 {
+#pragma warning disable CS8602
+
     public class LogBucket
     {
-        public List<LogObject> Logs;
-        private List<LogObject> VerboseMessages;
+        public List<LogObject>? Logs;
+        private List<LogObject>? VerboseMessages;
 
         private readonly object _lock = new object();
 
@@ -59,8 +61,8 @@ namespace OnlineMongoMigrationProcessor
     }
     public static class Log
     {
-        private static LogBucket _logBucket;
-        private static string CurrentId ;
+        private static LogBucket? _logBucket;
+        private static string CurrentId=string.Empty ;
 
         public static void init(string _id)
         {
@@ -138,7 +140,7 @@ namespace OnlineMongoMigrationProcessor
                     return new LogBucket();
                 }
             }
-            catch (Exception ex)
+            catch
             {
                 throw new Exception("Log Init failed");
             }
