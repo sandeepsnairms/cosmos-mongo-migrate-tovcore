@@ -9,7 +9,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2022-03-01' = {
   name: appServicePlanName
   location: location
   sku: {
-    name: 'BI'   //Use  P1V3 for large workloads
+    name: 'B1'   //Use  P1V3 for large workloads
     tier: 'Basic'  //Use PremiumV2 for large workloads
   }
 }
