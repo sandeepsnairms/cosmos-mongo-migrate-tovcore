@@ -13,7 +13,10 @@ namespace OnlineMongoMigrationProcessor
 {
     internal static class MongoHelper
     {
-
+        public static long GetActualDocumentCount(IMongoCollection<BsonDocument> collection, MigrationUnit item)
+        {
+            return collection.CountDocuments(Builders<BsonDocument>.Filter.Empty);
+        }
 
         public static long GetDocCount(IMongoCollection<BsonDocument> _collection, BsonValue? gte, BsonValue? lte, DataType dataType)
         {
@@ -191,6 +194,24 @@ namespace OnlineMongoMigrationProcessor
             }
         }
 
+        public static DateTime BsonTimestampToUtcDateTime(BsonTimestamp bsonTimestamp)
+        {
+            // Extract seconds from the timestamp's value
+            long secondsSinceEpoch = bsonTimestamp.Timestamp;
+
+            // Convert seconds since Unix epoch to DateTime in UTC
+            return DateTimeOffset.FromUnixTimeSeconds(secondsSinceEpoch).UtcDateTime;
+        }
+
+        public static BsonTimestamp ConvertToBsonTimestamp(DateTime dateTime)
+        {
+            // Convert DateTime to Unix timestamp (seconds since Jan 1, 1970)
+            long secondsSinceEpoch = new DateTimeOffset(dateTime).ToUnixTimeSeconds();
+
+            // BsonTimestamp requires seconds and increment (logical clock)
+            // Here we're using a default increment of 0. You can adjust this if needed.
+            return new BsonTimestamp((int)secondsSinceEpoch, 0);
+        }
 
     }
 }
