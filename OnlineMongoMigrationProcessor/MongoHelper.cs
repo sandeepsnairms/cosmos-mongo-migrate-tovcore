@@ -15,7 +15,7 @@ namespace OnlineMongoMigrationProcessor
     {
 
 
-        public static long getDocCount(IMongoCollection<BsonDocument> _collection, BsonValue? gte, BsonValue? lte, DataType dataType)
+        public static long GetDocCount(IMongoCollection<BsonDocument> _collection, BsonValue? gte, BsonValue? lte, DataType dataType)
         {
             var filterBuilder = Builders<BsonDocument>.Filter;
 

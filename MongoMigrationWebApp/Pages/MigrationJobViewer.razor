@@ -10,25 +10,25 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3>
-        <button class="btn btn-light" @onclick="GoBack" style="border: none; background: transparent;">
+        <button class="btn btn-light" @onclick="GoBack" title="Back to Job List" style="border: none; background: transparent;">
             <i class="bi bi-arrow-left"></i>
         </button> @migrationJob?.Name - Job Status
     </h3>
     <div class="d-flex align-items-center mb-3">
         @if (migrationJob !=null && !migrationJob.IsCompleted && !migrationJob.CurrentlyActive && (migrationJob.IsStarted || (JobManager.migrationWorker != null && !JobManager.migrationWorker.ProcessRunning)))
         {
-            <button class="btn btn-primary mx-2" @onclick="ResumeJob">Resume Job</button>
+            <button class="btn btn-primary mx-2" title="Resume Job" @onclick="ResumeJob">Resume Job</button>
         }
 
         @if (migrationJob!=null && !migrationJob.IsCancelled && !migrationJob.IsCompleted && migrationJob.CurrentlyActive && JobManager.migrationWorker != null && JobManager.migrationWorker.ProcessRunning)
         {
-            <button class="btn btn-primary mx-2" @onclick="PauseJob">Pause Job</button>
+            <button class="btn btn-primary mx-2" title="Pause Job" @onclick="PauseJob">Pause Job</button>
             @if (migrationJob.IsOnline)
             {
-                <button class="btn btn-warning mx-2" @onclick="CompleteJob" disabled="@(!CheckCutoverReadiness())">Cut Over</button>
+                <button class="btn btn-warning mx-2" title="Perform Cut Over" @onclick="CompleteJob" disabled="@(!CheckCutoverReadiness())">Cut Over</button>
             }
-            <button class="btn btn-toolbar" @onclick="Refresh">
-                <i class="bi bi-arrow-repeat"></i>&nbsp;&nbsp; Refresh
+            <button class="btn btn-toolbar" title="Refresh" @onclick="Refresh">
+                <i class="bi bi-arrow-repeat"></i>
             </button>
         }
 
@@ -124,7 +124,7 @@
 @if (LogBucket!=null && LogBucket.Logs != null)
 {
     <h5 class=" pt-4">
-        <button class="btn btn-light" @onclick="DownloadFile" style="border: none; background: transparent;">
+        <button class="btn btn-light" @onclick="DownloadFile" title="Download Log File"  style="border: none; background: transparent;">
             <i class="bi bi-download"></i>
         </button> Logs
     </h5>

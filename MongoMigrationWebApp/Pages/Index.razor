@@ -1,19 +1,26 @@
 ﻿@page "/"
 @inject Service.JobManager JobManager
+
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @inject Service.FileService FileService
 @inject HttpClient HttpClient
 
 @using MongoMigrationWebApp.Components
+@using OnlineMongoMigrationProcessor
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">
-        <button class="btn btn-light" @onclick="DownloadFile" style="border: none; background: transparent;">
+        <button class="btn btn-light" title="Download Jobs JSON" @onclick="DownloadFile" style="border: none; background: transparent;">
             <i class="bi bi-download"></i>
         </button>
         Migration Jobs</h3>
-    <button class="btn btn-primary" @onclick="StartMigrationAsync">New Job</button>
+    <div class="d-flex align-items-center mb-3">
+        <button class="btn btn-primary" title="New Job" @onclick="StartMigrationAsync">New Job</button>
+        <button class="btn btn-light" title="Edit Migration Settings" @onclick="OpenConfig" style="border: none; background: transparent;">
+            <i class="bi bi-gear"></i>
+        </button>
+    </div>
 
 </div>
 @if (_loadingComplete==true)
@@ -52,10 +59,10 @@
                         <td>@migration.IsOnline</td>
                         <td>@migration.IsCompleted</td>
                         <td>                            
-                            <button class="btn btn-primary" @onclick="() => ViewMigration(migration.Id)"  title="View">
+                            <button class="btn btn-primary" title="View Job" @onclick="() => ViewMigration(migration.Id)">
                                 <i class="bi bi-eye"></i>
                             </button>
-                            <button class="btn btn-secondary" @onclick="() => RemoveMigration(migration.Id)" title="View">
+                            <button class="btn btn-secondary" title="Delete Job" @onclick="() => RemoveMigration(migration.Id)" >
                                 <i class="bi bi-trash"></i>
                             </button>
                         </td>
@@ -66,12 +73,12 @@
 
         <script>
             function downloadFile(fileBytes, fileName, contentType) {
-                const blob = new Blob([new Uint8Array(fileBytes)], { type: contentType });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = fileName;
-                link.click();
-                URL.revokeObjectURL(link.href);
+            const blob = new Blob([new Uint8Array(fileBytes)], { type: contentType });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+            URL.revokeObjectURL(link.href);
             }
         </script>
     }
@@ -93,16 +100,20 @@
     <YesNoDialog Type="YesNoDialog.Category.Okay" Caption="Message" Message="@_Message" OnClose="@YesNoDialogSubmit"  />
 }
 
+@if (_EditSettingsOpen)
+{
+    <MigrationSettings Configuration="@GetConfig()" OnConfigurationSaved="HandleConfigurationSaved" />
+}
+
 @code {
 
-#pragma warning disable CS8603
+    #pragma warning disable CS8603
 #pragma warning disable CS8604
 
     private bool _MigrationDetailsPopUpOpen;
-
     private bool _YesNoDialogOpen;
-
     private bool _MessageDialogOpen;
+    private bool _EditSettingsOpen;
 
     private string _Message=string.Empty;
 
@@ -128,9 +139,9 @@
 #pragma warning restore CS1998
 #pragma warning disable CS8602
 
-     private async Task DownloadFile()
+    private async Task DownloadFile()
     {
-     
+
         var url = $"/api/File/download/Jobs"; 
         var response = await HttpClient.GetAsync(url);
 
@@ -190,15 +201,38 @@
                     // catch { }
                 }
                 JobManager.GetMigrations().Remove(_SelectedMigrationJob);
- 
+
             }
-            
+
 
 
             _SelectedMigrationJob = null;
         }
     }
 
+    private OnlineMongoMigrationProcessor.MigrationSettings GetConfig()
+    {
+        if (JobManager.migrationWorker.Config == null)
+            JobManager.migrationWorker.Config = new  OnlineMongoMigrationProcessor.MigrationSettings();
+
+        return JobManager.migrationWorker.Config;
+    }
+    private async Task OpenConfig()
+    {
+        _EditSettingsOpen = true;
+    }
+
+    private void HandleConfigurationSaved(OnlineMongoMigrationProcessor.MigrationSettings updatedConfig)
+    {
+
+        _EditSettingsOpen = false;
+
+        if (updatedConfig != null)
+        {
+            JobManager.migrationWorker.Config = updatedConfig;
+            Console.WriteLine($"Configuration updated: {updatedConfig.MongoToolsDownloadURL}");
+        }
+    }
 
     private void ViewMigration(string? id)
     {

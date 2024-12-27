@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.IO;
 using MongoDB.Bson;
 using Newtonsoft.Json;
@@ -121,6 +122,24 @@ namespace OnlineMongoMigrationProcessor
         public DateTime Datetime { get; set; }
     }
 
+
+
+    public class MigrationSettings
+    {
+
+        public string? MongoToolsDownloadURL { get; set; }
+        public bool HasUUID { get; set; }
+        public long ChunkSizeInMB { get; set; }
+
+
+        public MigrationSettings()
+        {
+            HasUUID = false;
+            MongoToolsDownloadURL = "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-windows-x86_64-100.10.0.zip";
+            ChunkSizeInMB = 5120;
+        }
+    }
+
     public enum LogType { Error, Messge};
 
     public class MigrationChunk
@@ -133,6 +152,7 @@ namespace OnlineMongoMigrationProcessor
         public long DumpResultDocCount { get; set; }
         public long RestoredSucessDocCount { get; set; }
         public long RestoredFailedDocCount { get; set; }
+        public long DocCountInTarget { get; set; }
         public DataType DataType { get; set; }
 
         public MigrationChunk(string strtId, string endId,DataType dataType, bool? downloaded, bool? uploaded)

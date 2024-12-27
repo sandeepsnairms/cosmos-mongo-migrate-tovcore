@@ -36,7 +36,6 @@ namespace OnlineMongoMigrationProcessor
     public class MigrationWorker
     {
 
-        string toolsDownloadUrl = "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-windows-x86_64-100.10.0.zip"; // Replace with actual URL
         string toolsDestinationFolder=$"{Path.GetTempPath()}mongo-tools";
         string toolsLaunchFolder=string.Empty;
         string MongoDumpOutputFolder= $"{Path.GetTempPath()}mongodump";
@@ -48,6 +47,9 @@ namespace OnlineMongoMigrationProcessor
         public bool ProcessRunning { get; set; }
 
         private Joblist? Jobs;
+
+        public MigrationSettings? Config;
+
         private MongoClient? sourceClient;
         private MongoClient? targetClient;
 
@@ -82,6 +84,9 @@ namespace OnlineMongoMigrationProcessor
 
             TimeSpan backoff = TimeSpan.FromSeconds(2);
 
+            if (Config == null)
+                Config = new MigrationSettings();
+
             Job = _job;
 
             ProcessRunning = true;
@@ -104,7 +109,7 @@ namespace OnlineMongoMigrationProcessor
 
 
             // Ensure MongoDB tools are available        
-            toolsLaunchFolder = await Helper.EnsureMongoToolsAvailableAsync(toolsDestinationFolder, toolsDownloadUrl);          
+            toolsLaunchFolder = await Helper.EnsureMongoToolsAvailableAsync(toolsDestinationFolder, Config.MongoToolsDownloadURL);          
 
             bool continueProcessing =true;
 
@@ -215,9 +220,7 @@ namespace OnlineMongoMigrationProcessor
             var collection = database.GetCollection<BsonDocument>(collectionName);
 
             // Target chunk size in bytes
-            long targetChunkSizeBytes = 2;
-            targetChunkSizeBytes = targetChunkSizeBytes * 1024 * 1024; // in MB
-            targetChunkSizeBytes = targetChunkSizeBytes * 1024; //in GB
+            long targetChunkSizeBytes = Config.ChunkSizeInMB * 1024 *1024; // converting to bytes
 
             // Get the total size of the collection
             var statsCommand = new BsonDocument { { "collStats", collectionName } };
@@ -240,7 +243,10 @@ namespace OnlineMongoMigrationProcessor
 
                 var partitioner = new SamplePartitioner(collection);
                 // List of data types to process
-                var dataTypes = new[] {  DataType.Int, DataType.Int64, DataType.String, DataType.Object, DataType.Decimal128, DataType.Date, DataType.ObjectId, DataType.UUID };
+                List<DataType> dataTypes = new List<DataType>{DataType.Int, DataType.Int64, DataType.String, DataType.Object, DataType.Decimal128, DataType.Date, DataType.ObjectId };
+
+                if(Config.HasUUID)
+                    dataTypes.Add(DataType.UUID);
 
                 foreach (var dataType in dataTypes)
                 {
@@ -459,7 +465,7 @@ namespace OnlineMongoMigrationProcessor
                                     // Generate query and get document count
                                     string query = MongoHelper.GenerateQueryString(gte, lt, item.MigrationChunks[i].DataType); ; // Generate the query string for debugging or logging
 
-                                    docCount = MongoHelper.getDocCount(collection, gte, lt,item.MigrationChunks[i].DataType );
+                                    docCount = MongoHelper.GetDocCount(collection, gte, lt,item.MigrationChunks[i].DataType );
 
 
                                     //string query;
@@ -610,10 +616,21 @@ namespace OnlineMongoMigrationProcessor
                                         item.MigrationChunks[i].IsUploaded = true;
                                         Jobs?.Save(); //persists state
 
+                                        if(item.MigrationChunks[i].RestoredFailedDocCount>0)
+                                        {
+                                            if(targetClient==null)
+                                                targetClient = new MongoClient(targetConnectionString);
+
+                                            var targetDb = targetClient.GetDatabase(item.DatabaseName);
+                                            var targetCollection = targetDb.GetCollection<BsonDocument>(item.CollectionName);
+                                            item.MigrationChunks[i].DocCountInTarget = MongoHelper.GetDocCount(targetCollection, item.MigrationChunks[i].Gte, item.MigrationChunks[i].Lt, item.MigrationChunks[i].DataType);
+                                            Jobs?.Save(); //persists state
+                                        }
+
                                         restoreAttempts = 0;
 
                                         restoredChunks++;
-                                        restoredDocs = restoredDocs + item.MigrationChunks[i].RestoredSucessDocCount;
+                                        restoredDocs = restoredDocs + Math.Max(item.MigrationChunks[i].RestoredSucessDocCount, item.MigrationChunks[i].DocCountInTarget);
                                         try
                                         {
                                             System.IO.Directory.Delete($"{folder}\\{i}.bson", true);
@@ -695,7 +712,9 @@ namespace OnlineMongoMigrationProcessor
                     // Process change streams
                     if (Online && !MigrationCancelled)
                     {
-                        targetClient = new MongoClient(targetConnectionString);
+                        if (targetClient == null)
+                            targetClient = new MongoClient(targetConnectionString);
+
                         Log.WriteLine($"{dbName}.{colName} ProcessCollectionChangeStream invoked");                            
                         Task.Run(() => ProcessCollectionChangeStream(item));
                         
