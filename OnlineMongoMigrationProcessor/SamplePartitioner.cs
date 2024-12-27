@@ -50,18 +50,18 @@ namespace OnlineMongoMigrationProcessor
             long docCountByType= GetDocumentCountByDataType(_collection,partitionKey,dataType);
             if (docCountByType == 0)
             {
-                Log.WriteLine($"0 Documents where type is {dataType}");
+                Log.WriteLine($"0 Documents where {partitionKey} is {dataType}");
                 Log.Save();
                 return null;
             }
             else if (docCountByType < minPartitonSize)
             {
-                Log.WriteLine($"Document Count where type is {dataType}:{docCountByType} is less than min partiton size.");
+                Log.WriteLine($"Document Count where {partitionKey} is {dataType}:{docCountByType} is less than min partiton size.");
                 sampleCount = 1;
                 partitionCount = 1;
             }
 
-            Log.WriteLine($"SampleCount: {sampleCount}, Partition Count: {partitionCount} where type is {dataType}");
+            Log.WriteLine($"SampleCount: {sampleCount}, Partition Count: {partitionCount} where {partitionKey} is {dataType}");
             Log.Save();
 
 
@@ -97,7 +97,7 @@ namespace OnlineMongoMigrationProcessor
                 boundaries.Add((min, max));
             }
 
-            Log.WriteLine($"Total Chunks: {boundaries.Count} where type is {dataType}");
+            Log.WriteLine($"Total Chunks: {boundaries.Count} where {partitionKey} is {dataType}");
             Log.Save();
 
             return boundaries;

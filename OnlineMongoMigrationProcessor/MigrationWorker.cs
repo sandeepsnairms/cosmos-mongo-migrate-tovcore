@@ -23,6 +23,7 @@ using System.Security.Cryptography;
 using static System.Net.WebRequestMethods;
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
+using System.Numerics;
 
 namespace OnlineMongoMigrationProcessor
 {
@@ -69,13 +70,6 @@ namespace OnlineMongoMigrationProcessor
             ProcessRunning = false;
         }
 
-        //bool GetCurrentJob(string jobId)
-        //{
-        //    if (jobId == CurrentJobId)
-        //        return true;
-        //    else
-        //        return false;
-        //}
 
         public async Task StartMigrationAsync(MigrationJob _job, string sourceConnectionString, string targetConnectionString, string namespacesToMigrate, bool doBulkCopy, bool trackChangeStreams)
         {
@@ -85,7 +79,11 @@ namespace OnlineMongoMigrationProcessor
             TimeSpan backoff = TimeSpan.FromSeconds(2);
 
             if (Config == null)
+            {
                 Config = new MigrationSettings();
+                Config.Load();
+            }
+
 
             Job = _job;
 
@@ -111,55 +109,64 @@ namespace OnlineMongoMigrationProcessor
             // Ensure MongoDB tools are available        
             toolsLaunchFolder = await Helper.EnsureMongoToolsAvailableAsync(toolsDestinationFolder, Config.MongoToolsDownloadURL);          
 
-            bool continueProcessing =true;
+            bool continueProcessing =true;   
 
-            while (attempts < maxRetries &&  !MigrationCancelled && continueProcessing)
+
+            if (Job.MigrationUnits == null)
+            {
+                // Storing migration metadata
+                Job.MigrationUnits = new List<MigrationUnit>();
+            }
+            if (Job.MigrationUnits.Count == 0)
+            {
+                // pocess collections one by one
+                foreach (var fullName in collectionsInput)
+                {
+                    if (MigrationCancelled) return;
+
+                    string[] parts = fullName.Split('.');
+                    if (parts.Length != 2) continue;
+
+                    string dbName = parts[0].Trim();
+                    string colName = parts[1].Trim();
+
+                    var mu = new MigrationUnit(dbName, colName, null);
+                    Job.MigrationUnits.Add(mu);
+                    Jobs?.Save();
+                }
+            }
+
+            while (attempts < maxRetries && !MigrationCancelled && continueProcessing)
             {
                 attempts++;
                 try
                 {
-                    if (MigrationCancelled)
-                        return;
-
-
                     sourceClient = new MongoClient(sourceConnectionString);
-
-
                     Log.WriteLine($"Source Connection Sucessfull");
                     Log.Save();
 
-                    if (Job.MigrationUnits == null)
+
+                    attempts = 0;
+                    backoff = TimeSpan.FromSeconds(2);
+                    foreach (var unit in Job.MigrationUnits)
                     {
-                        // Storing migration metadata
-                        Job.MigrationUnits = new List<MigrationUnit>();
-                    }
-                    if(Job.MigrationUnits.Count==0)
-                    { 
-                        // pocess collections one by one
-                        foreach (var fullName in collectionsInput)
-                        {
-                            if (MigrationCancelled) return;
+                        if (MigrationCancelled)
+                            return;
 
-                            string[] parts = fullName.Split('.');
-                            if (parts.Length != 2) continue;
+                        if(unit.MigrationChunks==null|| unit.MigrationChunks.Count == 0)
+                        { 
+                            var chunks = await PartitionCollection(unit.DatabaseName, unit.CollectionName);
 
-                            string dbName = parts[0].Trim();
-                            string colName = parts[1].Trim();
-
-                            attempts = 0;
-                            backoff = TimeSpan.FromSeconds(2);
-                            var chunks = await PartitionCollection(dbName, colName);
-
-                            Log.WriteLine($"{dbName}.{colName} has {chunks.Count} Chunks");
+                            Log.WriteLine($"{unit.DatabaseName}.{unit.CollectionName} has {chunks.Count} Chunks");
                             Log.Save();
 
-                            var mu = new MigrationUnit(dbName, colName, chunks);
-                            Job.MigrationUnits.Add(mu);
-
+                            unit.MigrationChunks = chunks;
                         }
-                        Jobs?.Save();
-                        Log.Save();
+
                     }
+                    Jobs?.Save();
+                    Log.Save();
+
                     if (BulkCopy)
                     {
                         // Process each group
@@ -172,7 +179,7 @@ namespace OnlineMongoMigrationProcessor
                     else
                         Log.WriteLine("Skipping Bulk Copy");
 
-                    continueProcessing=false;
+                    continueProcessing = false;
                 }
                 catch (MongoExecutionTimeoutException ex)
                 {
@@ -180,10 +187,10 @@ namespace OnlineMongoMigrationProcessor
 
                     if (attempts >= maxRetries)
                     {
-                        Log.WriteLine("Maximum retry attempts reached. Aborting operation.",LogType.Error);
+                        Log.WriteLine("Maximum retry attempts reached. Aborting operation.", LogType.Error);
                         Log.Save();
 
-                        Job.CurrentlyActive = false; 
+                        Job.CurrentlyActive = false;
                         Jobs?.Save();
 
                         ProcessRunning = false;
@@ -210,6 +217,7 @@ namespace OnlineMongoMigrationProcessor
                 }
 
             }
+            
         }
 
         
@@ -320,6 +328,7 @@ namespace OnlineMongoMigrationProcessor
 
             bool restoreInvoked=false;
 
+
             Log.WriteLine($"{dbName}.{colName} ProcessBulkDump started");
 
             // MongoDump
@@ -351,125 +360,32 @@ namespace OnlineMongoMigrationProcessor
                         int dumpAttempts = 0;
                         backoff = TimeSpan.FromSeconds(2);
                         bool continueProcessing = true;
+
                         while (dumpAttempts < maxRetries && !MigrationCancelled && continueProcessing && Job.CurrentlyActive)
                         {
+
+
                             dumpAttempts++;
                             string args = $" --uri=\"{sourceConnectionString}\" --gzip --db={dbName} --collection={colName}  --out {folder}\\{i}.bson";
                             try
                             {
                                 if (item.MigrationChunks.Count > 1)
                                 {
-                                    // Initialize gte and lt as null
-                                    BsonValue gte = null;
-                                    BsonValue lt = null;
 
-                                    switch (item.MigrationChunks[i].DataType)
-                                    {
-                                        case DataType.ObjectId:
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
-                                            {
-                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonObjectId(ObjectId.Parse(item.MigrationChunks[i].Gte));
-                                            }
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                            {
-                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonObjectId(ObjectId.Parse(item.MigrationChunks[i].Lt));
-                                            }
-                                            break;
-
-                                        case DataType.Int:
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
-                                            {
-                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonInt32(int.Parse(item.MigrationChunks[i].Gte));
-                                            }
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                            {
-                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonInt32(int.Parse(item.MigrationChunks[i].Lt));
-                                            }
-                                            break;
-
-                                        case DataType.Int64:
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
-                                            {
-                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonInt64(long.Parse(item.MigrationChunks[i].Gte));
-                                            }
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                            {
-                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonInt64(long.Parse(item.MigrationChunks[i].Lt));
-                                            }
-                                            break;
-
-                                        case DataType.String:
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
-                                            {
-                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonString(item.MigrationChunks[i].Gte);
-                                            }
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                            {
-                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonString(item.MigrationChunks[i].Lt);
-                                            }
-                                            break;
-
-                                        case DataType.Object:
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
-                                            {
-                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : BsonDocument.Parse(item.MigrationChunks[i].Gte);
-                                            }
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                            {
-                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : BsonDocument.Parse(item.MigrationChunks[i].Lt);
-                                            }
-                                            break;
-
-                                        case DataType.Decimal128:
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
-                                            {
-                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonDecimal128(Decimal128.Parse(item.MigrationChunks[i].Gte));
-                                            }
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                            {
-                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonDecimal128(Decimal128.Parse(item.MigrationChunks[i].Lt));
-                                            }
-                                            break;
-
-                                        case DataType.Date:
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
-                                            {
-                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonDateTime(DateTime.Parse(item.MigrationChunks[i].Gte));
-                                            }
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                            {
-                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonDateTime(DateTime.Parse(item.MigrationChunks[i].Lt));
-                                            }
-                                            break;
-
-                                        case DataType.UUID:
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Gte))
-                                            {
-                                                gte = item.MigrationChunks[i].Gte.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonBinaryData(Guid.Parse(item.MigrationChunks[i].Gte).ToByteArray(), BsonBinarySubType.UuidStandard);
-                                            }
-                                            if (!string.IsNullOrEmpty(item.MigrationChunks[i].Lt))
-                                            {
-                                                lt = item.MigrationChunks[i].Lt.Equals("BsonMaxKey") ? BsonMaxKey.Value : new BsonBinaryData(Guid.Parse(item.MigrationChunks[i].Lt).ToByteArray(), BsonBinarySubType.UuidStandard);
-                                            }
-                                            break;
-
-                                        default:
-                                            throw new ArgumentException($"Unsupported data type: {item.MigrationChunks[i].DataType}");
-                                    }
+                                    var bounds = GetChunkBounds(item.MigrationChunks[i]);
+                                    var gte = bounds.gte;
+                                    var lt = bounds.lt;
 
 
-                                    // Log information
                                     Log.WriteLine($"{dbName}.{colName}-Chunk[{i}] generating query");
                                     Log.Save();
 
                                     // Generate query and get document count
-                                    string query = MongoHelper.GenerateQueryString(gte, lt, item.MigrationChunks[i].DataType); ; // Generate the query string for debugging or logging
+                                    string query = MongoHelper.GenerateQueryString(gte, lt, item.MigrationChunks[i].DataType); 
 
                                     docCount = MongoHelper.GetDocCount(collection, gte, lt,item.MigrationChunks[i].DataType );
 
 
-                                    //string query;
-                                    //docCount = MongoHelper.GenerateQueryAndCount(collection, gte, lt, item.MigrationChunks[i].dataType, out query);
                                     item.MigrationChunks[i].DumpQueryDocCount = docCount;
 
                                     downloadCount = downloadCount + item.MigrationChunks[i].DumpQueryDocCount;
@@ -479,14 +395,23 @@ namespace OnlineMongoMigrationProcessor
 
                                     args = $"{args} --query=\"{query}\"";
                                 }
-                        
-                           
-                                if (ProcessExecutor.Execute(Jobs, item, item.MigrationChunks[i], initialPercent, contributionfactor, docCount, $"{toolsLaunchFolder}\\mongodump.exe", args))
+
+                                if(System.IO.Directory.Exists($"folder\\{i}.bson"))
+                                    System.IO.Directory.Delete($"folder\\{ i}.bson",true);
+
+
+                                var task = Task.Run(() => ProcessExecutor.Execute(Jobs, item, item.MigrationChunks[i], initialPercent, contributionfactor, docCount, $"{toolsLaunchFolder}\\mongodump.exe", args));
+                                task.Wait(); // Wait for the task to complete
+                                bool result = task.Result; // Capture the result after the task completes
+
+                                //if (ProcessExecutor.Execute(Jobs, item, item.MigrationChunks[i], initialPercent, contributionfactor, docCount, $"{toolsLaunchFolder}\\mongodump.exe", args))
+                                if (result)
                                 {
                                     continueProcessing = false;
                                     item.MigrationChunks[i].IsDownloaded = true;
                                     Jobs?.Save(); //persists state
                                     dumpAttempts = 0;
+
                                     if (!restoreInvoked)
                                     {
                                         Log.WriteLine($"{dbName}.{colName} ProcessBulkRestore invoked");
@@ -498,22 +423,25 @@ namespace OnlineMongoMigrationProcessor
                                 else
                                 {
                                     Log.WriteLine($"Attempt {dumpAttempts} {dbName}.{colName}-{i} of Dump Executor failed");
-                                    System.Threading.Thread.Sleep(10000);
+
+                                    //System.Threading.Thread.Sleep(10000);
                                 }
-                            }
+                            }                            
                             catch (MongoExecutionTimeoutException ex)
                             {
+
                                 Log.WriteLine($" Dump attempt {dumpAttempts} failed due to timeout: {ex.Message}", LogType.Error);
 
                                 if (dumpAttempts >= maxRetries)
                                 {
-                                    Log.WriteLine("Maximum retry attempts reached. Aborting operation.", LogType.Error);
+                                    Log.WriteLine("Maximum dump attempts reached. Aborting operation.", LogType.Error);
                                     Log.Save();
 
                                     Job.CurrentlyActive = false;
                                     Jobs?.Save();
 
                                     ProcessRunning = false;
+                                    
                                 }
 
                                 // Wait for the backoff duration before retrying
@@ -532,7 +460,9 @@ namespace OnlineMongoMigrationProcessor
                                 Job.CurrentlyActive = false;
                                 Jobs?.Save();
                                 ProcessRunning = false;
+
                             }
+
                         }
                         if (dumpAttempts == maxRetries)
                         {
@@ -559,6 +489,73 @@ namespace OnlineMongoMigrationProcessor
                 restoreInvoked = true;
                 Task.Run(() => ProcessBulkRestore(item, targetConnectionstring));
             }           
+        }
+
+
+        public static (BsonValue gte, BsonValue lt) GetChunkBounds(MigrationChunk chunk)
+        {
+            BsonValue gte = null;
+            BsonValue lt = null;
+
+            // Initialize `gte` and `lt` based on special cases
+            if (chunk.Gte.Equals("BsonMaxKey"))
+                gte = BsonMaxKey.Value;
+            else if (string.IsNullOrEmpty(chunk.Gte))
+                gte = BsonNull.Value;
+
+            if (chunk.Lt.Equals("BsonMaxKey"))
+                lt = BsonMaxKey.Value;
+            else if (string.IsNullOrEmpty(chunk.Lt))
+                lt = BsonNull.Value;
+
+            // Handle by DataType
+            switch (chunk.DataType)
+            {
+                case DataType.ObjectId:
+                    gte ??= new BsonObjectId(ObjectId.Parse(chunk.Gte));
+                    lt ??= new BsonObjectId(ObjectId.Parse(chunk.Lt));
+                    break;
+
+                case DataType.Int:
+                    gte ??= new BsonInt32(int.Parse(chunk.Gte));
+                    lt ??= new BsonInt32(int.Parse(chunk.Lt));
+                    break;
+
+                case DataType.Int64:
+                    gte ??= new BsonInt64(long.Parse(chunk.Gte));
+                    lt ??= new BsonInt64(long.Parse(chunk.Lt));
+                    break;
+
+                case DataType.String:
+                    gte ??= new BsonString(chunk.Gte);
+                    lt ??= new BsonString(chunk.Lt);
+                    break;
+
+                case DataType.Object:
+                    gte ??= BsonDocument.Parse(chunk.Gte);
+                    lt ??= BsonDocument.Parse(chunk.Lt);
+                    break;
+
+                case DataType.Decimal128:
+                    gte ??= new BsonDecimal128(Decimal128.Parse(chunk.Gte));
+                    lt ??= new BsonDecimal128(Decimal128.Parse(chunk.Lt));
+                    break;
+
+                case DataType.Date:
+                    gte ??= new BsonDateTime(DateTime.Parse(chunk.Gte));
+                    lt ??= new BsonDateTime(DateTime.Parse(chunk.Lt));
+                    break;
+
+                case DataType.UUID:
+                    gte ??= new BsonBinaryData(Guid.Parse(chunk.Gte).ToByteArray(), BsonBinarySubType.UuidStandard);
+                    lt ??= new BsonBinaryData(Guid.Parse(chunk.Lt).ToByteArray(), BsonBinarySubType.UuidStandard);
+                    break;
+
+                default:
+                    throw new ArgumentException($"Unsupported data type: {chunk.DataType}");
+            }
+
+            return (gte, lt);
         }
 
         void ProcessBulkRestore(MigrationUnit item,string targetConnectionString)
@@ -598,9 +595,11 @@ namespace OnlineMongoMigrationProcessor
 
                             double initialPercent = ((double)100 / ((double)item.MigrationChunks.Count)) * i;
                             //double contributionfactor = (double)1 / (double)item.MigrationChunks.Count;
+                            
                             double contributionfactor = (double)item.MigrationChunks[i].DumpQueryDocCount / (double)Math.Max(item.ActualDocCount, item.EstimatedDocCount);
+                            if (item.MigrationChunks.Count == 1) contributionfactor = 1;
 
-                            Log.WriteLine($"{dbName}.{colName}-{i} ProcessBulkRestore processing");
+                                Log.WriteLine($"{dbName}.{colName}-{i} ProcessBulkRestore processing");
 
                             int restoreAttempts = 0;
                             backoff = TimeSpan.FromSeconds(2);
@@ -623,7 +622,19 @@ namespace OnlineMongoMigrationProcessor
 
                                             var targetDb = targetClient.GetDatabase(item.DatabaseName);
                                             var targetCollection = targetDb.GetCollection<BsonDocument>(item.CollectionName);
-                                            item.MigrationChunks[i].DocCountInTarget = MongoHelper.GetDocCount(targetCollection, item.MigrationChunks[i].Gte, item.MigrationChunks[i].Lt, item.MigrationChunks[i].DataType);
+
+                                            var bounds = GetChunkBounds(item.MigrationChunks[i]);
+                                            var gte = bounds.gte;
+                                            var lt = bounds.lt;
+
+                                            item.MigrationChunks[i].DocCountInTarget = MongoHelper.GetDocCount(targetCollection, gte, lt, item.MigrationChunks[i].DataType);
+
+                                            if (item.MigrationChunks[i].DocCountInTarget == item.MigrationChunks[i].DumpResultDocCount)
+                                            {
+                                                Log.WriteLine($"{dbName}.{colName}-{i} No documents missing, count in Target: {item.MigrationChunks[i].DocCountInTarget}");
+                                                Log.Save();
+                                            }
+
                                             Jobs?.Save(); //persists state
                                         }
 
@@ -640,7 +651,7 @@ namespace OnlineMongoMigrationProcessor
                                     else
                                     {
                                         Log.WriteLine($"Attempt {restoreAttempts}{dbName}.{colName}-{i} of Restore Executor failed");
-                                        System.Threading.Thread.Sleep(10000);
+                                        //System.Threading.Thread.Sleep(10000);
                                     }                                    
                                 }
                                 catch (MongoExecutionTimeoutException ex)
@@ -678,6 +689,8 @@ namespace OnlineMongoMigrationProcessor
                             }
                             if(restoreAttempts == maxRetries)
                             {
+                                Log.WriteLine("Maximum restore attempts reached. Aborting operations.", LogType.Error);
+                                Log.Save();
 
                                 Job.CurrentlyActive = false;
                                 Jobs?.Save();

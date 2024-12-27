@@ -296,7 +296,7 @@
 
         if (!migrationJob.IsStarted || (!migrationJob.IsCancelled && !migrationJob.IsCompleted && migrationJob.CurrentlyActive && !IsJobRunning()))
         {
-            await ResumeJob();
+            ResumeJob();
         }
         if (!migrationJob.IsCancelled && !migrationJob.IsCompleted && migrationJob.CurrentlyActive && IsJobRunning())
         {

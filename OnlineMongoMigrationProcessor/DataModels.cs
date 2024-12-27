@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations;
 using System.IO;
 using MongoDB.Bson;
 using Newtonsoft.Json;
+using SharpCompress.Common;
 
 namespace OnlineMongoMigrationProcessor
 {
@@ -131,12 +132,50 @@ namespace OnlineMongoMigrationProcessor
         public bool HasUUID { get; set; }
         public long ChunkSizeInMB { get; set; }
 
+        private string filePath=string.Empty;
 
         public MigrationSettings()
         {
-            HasUUID = false;
-            MongoToolsDownloadURL = "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-windows-x86_64-100.10.0.zip";
-            ChunkSizeInMB = 5120;
+            filePath = $"{Path.GetTempPath()}migrationjobs\\config.json";
+           
+        }
+
+        public void Load()
+        {
+            bool initialized = false;
+            if (File.Exists(filePath))
+            {
+                string json = File.ReadAllText(filePath);
+                var loadedObject = JsonConvert.DeserializeObject<MigrationSettings>(json);
+                if (loadedObject != null)
+                {
+                    HasUUID = loadedObject.HasUUID;
+                    MongoToolsDownloadURL = loadedObject.MongoToolsDownloadURL;
+                    ChunkSizeInMB = loadedObject.ChunkSizeInMB;
+                    initialized = true;
+                }
+            }
+            if (!initialized)
+            {
+                HasUUID = false;
+                MongoToolsDownloadURL = "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-windows-x86_64-100.10.0.zip";
+                ChunkSizeInMB = 5120;
+            }
+        }
+
+        public bool Save()
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(this);
+                File.WriteAllText(filePath, json);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.WriteLine($"Error saving data: {ex.Message}", LogType.Error);
+                return false;
+            }
         }
     }
 

@@ -213,7 +213,10 @@
     private OnlineMongoMigrationProcessor.MigrationSettings GetConfig()
     {
         if (JobManager.migrationWorker.Config == null)
+        {
             JobManager.migrationWorker.Config = new  OnlineMongoMigrationProcessor.MigrationSettings();
+            JobManager.migrationWorker.Config.Load();
+        }
 
         return JobManager.migrationWorker.Config;
     }
@@ -230,6 +233,7 @@
         if (updatedConfig != null)
         {
             JobManager.migrationWorker.Config = updatedConfig;
+            JobManager.migrationWorker.Config.Save();
             Console.WriteLine($"Configuration updated: {updatedConfig.MongoToolsDownloadURL}");
         }
     }
