@@ -1,13 +1,6 @@
 param location string
 param webAppName string
 
-/*
-Uncomment the following code to reference an existing VNet and subnet
-
-param vnetName string
-param vnetResourceGroup string
-param subnetName string
-*/
 
 var appServicePlanName = '${webAppName}SP'
 
@@ -24,25 +17,6 @@ resource webApp 'Microsoft.Web/sites@2022-03-01' = {
   name: webAppName
   location: location
   properties: {
-    serverFarmId: appServicePlan.id
-    //virtualNetworkSubnetId: existingSubnet.id  //Uncomment this line  to reference an existing VNet and subnet
-  }
+    serverFarmId: appServicePlan.id    
 }
 
-/* 
-
-Uncomment the following code to reference an existing VNet and subnet
-
-
-// Define a reference to the virtual network
-resource existingVnet 'Microsoft.Network/virtualNetworks@2023-05-01' existing = {
-  name: vnetName
-  scope: resourceGroup(vnetResourceGroup)
-}
-
-// Reference the existing subnet within the VNet
-resource existingSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-05-01' existing = {
-  name: subnetName
-  parent: existingVnet
-}
-*/

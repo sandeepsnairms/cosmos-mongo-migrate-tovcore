@@ -51,10 +51,6 @@ Clone the repository:
    $webAppName = <Replace with Web App Name>
    $projectFolderPath = <Replace with path to cloned repo on local>
 
-   # Optional: VNet-related variables, Uncomment below 3 lines.
-   #$vnetName = <Replace with existing VNet>
-   #$vnetResourceGroup = <Replace with VNet Resource Group Name>
-   #$subnetName = <Replace with existing Subnet>
 
    # Paths - No changes required
    $projectFilePath = "$projectFolderPath\MongoMigrationWebApp\MongoMigrationWebApp.csproj"
@@ -97,12 +93,6 @@ Ensure you have:
 - A subnet dedicated to private endpoints (e.g., `PrivateEndpointSubnet`).
 - Permissions to configure networking and private endpoints in Azure.
 
-**Uncomment the VNet-related lines in `main.bicep` and deploy the web app using the following command:**
-
-```powershell
-az deployment group create --resource-group $resourceGroupName --template-file main.bicep --parameters location=WestUs3 webAppName=$webAppName vnetName=$vnetName vnetResourceGroup=$vnetResourceGroup subnetName=$subnetName
-```
-
 ### Enable Private Endpoint
 
 #### 1. Navigate to the Web App
@@ -118,7 +108,7 @@ az deployment group create --resource-group $resourceGroupName --template-file m
 
 #### 3. Create the Private Endpoint
 
-Follow these steps in the **Add Private Endpoint** wizard:
+Follow these steps in the **Add Private Endpoint** Advanced wizard:
 
 ##### a. Basics
 
